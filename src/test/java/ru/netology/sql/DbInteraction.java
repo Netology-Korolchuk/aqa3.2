@@ -27,6 +27,15 @@ public class DbInteraction {
     private static List<User> users;
 
 
+    @BeforeAll
+    static void setUp() throws SQLException {
+        val runner = new QueryRunner();
+        val usersSQL = "SELECT * FROM users;";
+        try (val conn = DriverManager.getConnection(url, user, password)) {
+            users = runner.query(conn, usersSQL, new BeanListHandler<>(User.class));
+        }
+    }
+
     @AfterAll
     static void clearDB() throws SQLException {
         val runner = new QueryRunner();
@@ -38,20 +47,12 @@ public class DbInteraction {
         }
     }
 
-    @BeforeAll
-    static void setUp() throws SQLException {
-        val runner = new QueryRunner();
-        val usersSQL = "SELECT * FROM users;";
-        try (val conn = DriverManager.getConnection(url, user, password)) {
-            users = runner.query(conn, usersSQL, new BeanListHandler<>(User.class));
-        }
-    }
-
     @Test
     @DisplayName("Added user in DB and login")
     void shouldAddedUser() throws SQLException {
-        val faker = new Faker();
-        val newUser = new User(faker.bothify("??##-###??-???"), faker.internet().domainName(), faker.internet().password(), "active");
+
+        val newUser = new User("1", "user", "password", "active");
+
         val runner = new QueryRunner();
         val addUserSQL = "INSERT INTO users (id, login, password) values(?, ?, ?);";
         val codeSQL = "SELECT code FROM auth_codes WHERE user_id = ? ORDER BY created DESC;";
@@ -79,60 +80,4 @@ public class DbInteraction {
         }
     }
 
-    @Test
-    @DisplayName("Positive test:second user")
-    void shouldReloadDashboardPageV2() throws SQLException {
-        val runner = new QueryRunner();
-        val codeSQL = "SELECT code FROM auth_codes WHERE user_id = ? ORDER BY created DESC;";
-        try (val conn = DriverManager.getConnection(url, user, password)) {
-            open(serviceUrl);
-            val loginPage = new LoginPage();
-            val verificationPage = loginPage.validLogin(users.get(1));
-            val code = runner.query(conn, codeSQL, new ScalarHandler<String>(), users.get(1).getId());
-            verificationPage.validVerify(code);
-        }
-    }
-
-    @Test
-    @DisplayName("Negative test: wrong login")
-    void shouldValidateLogin() {
-        open(serviceUrl);
-        val loginPage = new LoginPage();
-        loginPage.noValidLogin(users.get(1));
-        loginPage.assertErrorText();
-    }
-
-    @Test
-    @DisplayName("Negative test: wrong password")
-    void shouldValidatePassword() {
-        open(serviceUrl);
-        val loginPage = new LoginPage();
-        loginPage.noValidPassword(users.get(0));
-        loginPage.assertErrorText();
-    }
-
-    @Test
-    @DisplayName("Negative test: wrong code")
-    void shouldValidateCode() {
-        open(serviceUrl);
-        val loginPage = new LoginPage();
-        val verificationPage = loginPage.validLogin(users.get(0));
-        verificationPage.NoValidVerify();
-        verificationPage.assertErrorText();
-    }
-
-    @Test
-    @DisplayName("Negative test: wrong password 3 times")
-    void shouldBlocked() throws SQLException {
-        val runner = new QueryRunner();
-        val statusSQL = "SELECT status FROM users where id = ? ;";
-        open(serviceUrl);
-        val loginPage = new LoginPage();
-        loginPage.noValidPasswordThreeTimes(users.get(0));
-        loginPage.assertErrorText();
-        try (val conn = DriverManager.getConnection(url, user, password)) {
-            val status = runner.query(conn, statusSQL, new ScalarHandler<String>(), users.get(0).getId());
-            assertEquals("blocked", status);
-        }
-    }
 }
